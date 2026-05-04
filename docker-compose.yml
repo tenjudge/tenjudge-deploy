@@ -1,0 +1,171 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg18-trixie
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "tenjudge_app"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+      POSTGRES_DB: "tenjudge"
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - tenjudge_postgres_data:/var/lib/postgresql
+      - ./db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tenjudge_app -d tenjudge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8.4
+    restart: unless-stopped
+    command:
+      [
+        "redis-server",
+        "--appendonly", "yes",
+        "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      ]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - tenjudge_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  rabbitmq:
+    image: rabbitmq:4-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: "tenjudge_app"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}"
+      RABBITMQ_DEFAULT_VHOST: "tenjudge"
+    volumes:
+      - tenjudge_rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: "tenjudge_app"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}"
+    command: server /data --console-address ":9001"
+    volumes:
+      - tenjudge_minio_data:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  tenjudge-server:
+    image: tenjudge-server:latest
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: "prod"
+      POSTGRES_URL: "jdbc:postgresql://postgres:5432/tenjudge"
+      POSTGRES_USERNAME: "tenjudge_app"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      REDIS_DATABASE: "0"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      RABBITMQ_HOST: "rabbitmq"
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_VIRTUAL_HOST: "tenjudge"
+      RABBITMQ_USERNAME: "tenjudge_app"
+      RABBITMQ_PASSWORD: "${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}"
+      MINIO_ENDPOINT: "http://minio:9000"
+      MINIO_ACCESS_KEY: "tenjudge_app"
+      MINIO_SECRET_KEY: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}"
+      APP_SUPER_ADMIN_USERNAME: "${APP_SUPER_ADMIN_USERNAME:?APP_SUPER_ADMIN_USERNAME is required}"
+      APP_SUPER_ADMIN_PASSWORD: "${APP_SUPER_ADMIN_PASSWORD:?APP_SUPER_ADMIN_PASSWORD is required}"
+      APP_SUPER_ADMIN_EMAIL: "${APP_SUPER_ADMIN_EMAIL:?APP_SUPER_ADMIN_EMAIL is required}"
+      APP_FILE_STORAGE_TEMP: "/tmp/tenjudge"
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  tenjudge-frontend:
+    image: tenjudge-frontend:latest
+    restart: unless-stopped
+    environment:
+      FRONTEND_SERVER_NAME: "${FRONTEND_SERVER_NAME:-localhost}"
+      NGINX_ENVSUBST_FILTER: "^FRONTEND_SERVER_NAME$"
+    ports:
+      - "${FRONTEND_HTTP_BIND:-127.0.0.1}:${FRONTEND_HTTP_PORT:-3000}:80"
+    volumes:
+      - ./nginx/frontend.conf.template:/etc/nginx/templates/default.conf.template:ro
+    depends_on:
+      tenjudge-server:
+        condition: service_started
+
+  tenjudge-judge:
+    image: tenjudge-judge:latest
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: "prod"
+      POSTGRES_URL: "jdbc:postgresql://postgres:5432/tenjudge"
+      POSTGRES_USERNAME: "tenjudge_app"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      REDIS_DATABASE: "0"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      RABBITMQ_HOST: "rabbitmq"
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_VIRTUAL_HOST: "tenjudge"
+      RABBITMQ_USERNAME: "tenjudge_app"
+      RABBITMQ_PASSWORD: "${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}"
+      MINIO_ENDPOINT: "http://minio:9000"
+      MINIO_ACCESS_KEY: "tenjudge_app"
+      MINIO_SECRET_KEY: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}"
+      GO_JUDGE_URL: "http://tenjudge-sandbox:5050"
+      APP_RABBITMQ_SUBMIT_LISTENER_CONCURRENCY: "${APP_RABBITMQ_SUBMIT_LISTENER_CONCURRENCY:?APP_RABBITMQ_SUBMIT_LISTENER_CONCURRENCY is required}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      tenjudge-sandbox:
+        condition: service_started
+
+  tenjudge-sandbox:
+    image: tenjudge-sandbox:latest
+    restart: unless-stopped
+    privileged: true
+    shm_size: "256m"
+    ports:
+      - "127.0.0.1:5050:5050"
+
+volumes:
+  tenjudge_postgres_data:
+  tenjudge_redis_data:
+  tenjudge_rabbitmq_data:
+  tenjudge_minio_data:
