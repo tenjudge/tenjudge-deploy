@@ -39,6 +39,12 @@ RABBITMQ_PASSWORD=your_real_rabbitmq_password
 MINIO_ROOT_PASSWORD=your_real_minio_password
 ```
 
+后端和判题服务时区配置：
+
+```env
+TZ=Asia/Shanghai
+```
+
 超级管理员初始化配置：
 
 ```env
