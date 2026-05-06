@@ -73,7 +73,7 @@ services:
       retries: 5
 
   tenjudge-server:
-    image: tenjudge-server:latest
+    image: ${TENJUDGE_IMAGE_PREFIX:-}tenjudge-server:latest
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: "prod"
@@ -110,7 +110,7 @@ services:
         condition: service_healthy
 
   tenjudge-frontend:
-    image: tenjudge-frontend:latest
+    image: ${TENJUDGE_IMAGE_PREFIX:-}tenjudge-frontend:latest
     restart: unless-stopped
     environment:
       FRONTEND_SERVER_NAME: "${FRONTEND_SERVER_NAME:-localhost}"
@@ -124,7 +124,7 @@ services:
         condition: service_started
 
   tenjudge-judge:
-    image: tenjudge-judge:latest
+    image: ${TENJUDGE_IMAGE_PREFIX:-}tenjudge-judge:latest
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: "prod"
@@ -159,7 +159,7 @@ services:
         condition: service_started
 
   tenjudge-sandbox:
-    image: tenjudge-sandbox:latest
+    image: ${TENJUDGE_IMAGE_PREFIX:-}tenjudge-sandbox:latest
     restart: unless-stopped
     privileged: true
     shm_size: "256m"

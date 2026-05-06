@@ -17,7 +17,7 @@ Compose 会启动以下服务：
 
 ## 前置条件
 
-部署前需要先准备好 Docker 和 Docker Compose，并提前构建好本项目镜像：
+部署前需要先准备好 Docker 和 Docker Compose。默认会使用本地 TenJudge 镜像：
 
 ```bash
 tenjudge-server:latest
@@ -30,7 +30,17 @@ tenjudge-frontend:latest
 
 ## 配置 `.env`
 
-启动前先编辑 `.env`，至少替换所有密码占位值：
+启动前先编辑 `.env`，至少替换所有密码占位值。
+
+TenJudge 自有镜像默认使用本地镜像；如需切换镜像仓库，配置镜像前缀即可，前缀需要以 `/` 结尾：
+
+```env
+TENJUDGE_IMAGE_PREFIX=
+TENJUDGE_IMAGE_PREFIX=ghcr.io/tenjudge/
+TENJUDGE_IMAGE_PREFIX=ccr.ccs.tencentyun.com/tenjudge/
+```
+
+密码配置：
 
 ```env
 POSTGRES_PASSWORD=your_real_postgres_password
